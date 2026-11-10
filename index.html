@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a1628">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex, nofollow">
+<title>Skipperplan</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛵</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛵</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0a1628;--surface:#111f38;--card:#162640;--border:#1e3354;--accent:#3b82f6;--accent2:#06b6d4;--text:#e2eaf8;--muted:#5a7399;--success:#22c55e;--warning:#f59e0b;--danger:#ef4444;--radius:12px}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'DM Mono',ui-monospace,monospace;min-height:100vh;overflow-x:hidden}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(59,130,246,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+
+  /* Login */
+  #gate{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;align-items:center;justify-content:center;padding:24px}
+  .gate-box{width:100%;max-width:360px}
+  .gate-logo{display:flex;align-items:center;gap:14px;margin-bottom:32px}
+  .gate-icon{width:52px;height:52px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:12px;display:grid;place-items:center;font-size:26px;box-shadow:0 0 24px rgba(59,130,246,.4)}
+  .gate-title{font-family:'Syne',sans-serif;font-size:24px;font-weight:800}
+  .gate-sub{font-size:11px;color:var(--muted);letter-spacing:.5px;margin-top:3px}
+  .gate-label{display:block;font-size:11px;color:var(--muted);margin-bottom:8px;letter-spacing:.5px}
+  .gate-input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:15px;padding:13px 16px;outline:none;-webkit-appearance:none;transition:border-color .2s;margin-bottom:14px}
+  .gate-input:focus{border-color:var(--accent)}
+  .gate-err{font-size:12px;color:var(--danger);margin-top:-6px;margin-bottom:12px;min-height:0}
+  .server{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-top:16px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--warning);flex-shrink:0}
+  .dot.ready{background:var(--success)} .dot.down{background:var(--danger)}
+  .dot.starting{animation:pulse 1.2s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.3}}
+
+  /* App */
+  .app{position:relative;z-index:1;max-width:480px;margin:0 auto;padding:24px 16px 40px;display:none}
+  .header{display:flex;align-items:center;gap:14px;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border)}
+  .logo{width:44px;height:44px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:grid;place-items:center;font-size:22px;flex-shrink:0;box-shadow:0 0 20px rgba(59,130,246,.3)}
+  .header-text{flex:1}
+  .header-text h1{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;letter-spacing:-.3px;line-height:1}
+  .header-text p{font-size:11px;color:var(--muted);margin-top:3px;letter-spacing:.5px}
+  .logout{background:none;border:none;color:var(--muted);font-family:inherit;font-size:11px;cursor:pointer;text-decoration:underline;padding:4px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+  .card-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .btn{width:100%;padding:13px;border:none;border-radius:9px;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;letter-spacing:.3px;cursor:pointer;transition:transform .15s,opacity .2s;display:flex;align-items:center;justify-content:center;gap:8px;-webkit-tap-highlight-color:transparent}
+  .btn-primary{background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;box-shadow:0 4px 14px rgba(59,130,246,.35)}
+  .btn-secondary{background:linear-gradient(135deg,#1e3a5f,#162d4a);color:var(--text);border:1px solid var(--border);margin-top:10px}
+  .btn-outline{background:transparent;border:1px solid var(--border);color:var(--muted);font-size:12px;padding:9px;margin-top:10px}
+  .btn:active{transform:scale(.97)}
+  .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+  .timestamp{font-size:12px;color:var(--muted);margin-bottom:14px}
+  .timestamp strong{color:var(--text);font-weight:500}
+  .msg{font-size:12px;margin-top:12px;line-height:1.6}
+  .msg.err{color:var(--danger)} .msg.ok{color:var(--success)} .msg.info{color:var(--muted)}
+  .log{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:11px;line-height:1.8}
+  .log-line{display:flex;gap:8px}
+  .log-line.ok .icon{color:var(--success)} .log-line.err .icon{color:var(--danger)} .log-line.info .icon{color:var(--accent)}
+  .log-text{color:var(--text);word-break:break-word}
+  .hidden{display:none!important}
+  .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){.spinner,.dot.starting{animation:none}}
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="gate">
+  <form class="gate-box" onsubmit="event.preventDefault(); login();">
+    <div class="gate-logo">
+      <div class="gate-icon">⛵</div>
+      <div>
+        <div class="gate-title">Skipperplan</div>
+        <div class="gate-sub">Flotilla Management</div>
+      </div>
+    </div>
+    <label class="gate-label" for="pw">Passwort</label>
+    <input type="password" id="pw" class="gate-input" autocomplete="current-password" required>
+    <div id="gateErr" class="gate-err hidden"></div>
+    <button type="submit" class="btn btn-primary" id="btnLogin">Anmelden</button>
+    <div class="server"><span class="dot starting" id="dot"></span><span id="serverText">Server wird gestartet …</span></div>
+  </form>
+</div>
+
+<!-- App -->
+<div class="app" id="app">
+  <div class="header">
+    <div class="logo">⛵</div>
+    <div class="header-text">
+      <h1>Skipperplan</h1>
+      <p>Flotilla Management</p>
+    </div>
+    <button class="logout" onclick="logout()">Abmelden</button>
+  </div>
+
+  <div class="card" id="cardStart">
+    <div class="card-title">Skipperplan</div>
+    <div class="timestamp" id="timestamp">Zuletzt aktualisiert: unbekannt</div>
+    <button class="btn btn-primary" id="btnDownload" onclick="download()">Excel herunterladen</button>
+    <button class="btn btn-secondary" id="btnRefresh" onclick="refresh()">Jetzt aktualisieren</button>
+    <div class="msg hidden" id="msg"></div>
+  </div>
+
+  <div class="card hidden" id="cardRefresh">
+    <div class="card-title">Aktualisierung</div>
+    <div class="log" id="log"></div>
+    <button class="btn btn-outline hidden" id="btnBack" onclick="closeRefresh()">Zurück</button>
+  </div>
+</div>
+
+<script>
+const BACKEND_URL = 'https://skipperplan-backend.onrender.com';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let pw = sessionStorage.getItem('pw') || '';
+let awake = null;   // laufender Weck-Versuch (Promise<boolean>)
+
+// ── Server wecken ────────────────────────────────────────────────────────────
+function setServer(state){
+  const dot = document.getElementById('dot');
+  dot.className = 'dot ' + state;
+  document.getElementById('serverText').textContent =
+    state === 'ready' ? 'Server bereit' :
+    state === 'down'  ? 'Server antwortet nicht – später erneut versuchen' :
+                        'Server wird gestartet …';
+}
+
+function ensureAwake(){
+  if (awake) return awake;
+  setServer('starting');
+  awake = (async () => {
+    for (let i = 0; i < 18; i++) {            // bis ca. 90 s
+      try {
+        const r = await fetch(BACKEND_URL + '/health', {cache: 'no-store'});
+        if (r.ok) { setServer('ready'); return true; }
+      } catch (e) { /* Server schläft noch */ }
+      await sleep(5000);
+    }
+    setServer('down');
+    awake = null;                              // nächster Versuch startet neu
+    return false;
+  })();
+  return awake;
+}
+
+// ── Backend-Aufruf mit Passwort im Header ────────────────────────────────────
+async function api(path, method = 'GET', timeoutMs = 90000){
+  if (!await ensureAwake()) throw new Error('Server nicht erreichbar');
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const resp = await fetch(BACKEND_URL + path, {
+      method, headers: {'X-App-Password': pw}, signal: ctrl.signal, cache: 'no-store'
+    });
+    if (resp.status === 401) { logout('Sitzung abgelaufen – bitte erneut anmelden.'); throw new Error('Falsches Passwort'); }
+    return resp;
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Zeitüberschreitung – der Server hat nicht rechtzeitig geantwortet.');
+    throw e;
+  } finally { clearTimeout(t); }
+}
+
+// ── Anmelden / Abmelden ──────────────────────────────────────────────────────
+function gateError(text){
+  const el = document.getElementById('gateErr');
+  el.textContent = text || '';
+  el.classList.toggle('hidden', !text);
+}
+
+async function login(silent = false){
+  const input = document.getElementById('pw');
+  if (!silent) pw = input.value;
+  if (!pw) return;
+  const btn = document.getElementById('btnLogin');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Anmelden …';
+  gateError('');
+  try {
+    if (!await ensureAwake()) throw new Error('Server nicht erreichbar – später erneut versuchen.');
+    const resp = await fetch(BACKEND_URL + '/check', {
+      method: 'POST', headers: {'X-App-Password': pw}, cache: 'no-store'
+    });
+    if (resp.status === 401) {
+      sessionStorage.removeItem('pw'); pw = ''; input.value = '';
+      throw new Error('Falsches Passwort.');
+    }
+    if (!resp.ok) throw new Error(`Anmeldung fehlgeschlagen (HTTP ${resp.status}).`);
+    const data = await resp.json();
+    sessionStorage.setItem('pw', pw);
+    showApp(data.updated);
+  } catch (e) {
+    gateError(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Anmelden';
+  }
+}
+
+function logout(text){
+  sessionStorage.removeItem('pw');
+  pw = '';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('gate').style.display = 'flex';
+  document.getElementById('pw').value = '';
+  gateError(typeof text === 'string' ? text : '');
+}
+
+function showApp(updatedIso){
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  setTimestamp(updatedIso);
+}
+
+function setTimestamp(updatedIso){
+  const el = document.getElementById('timestamp');
+  if (!updatedIso) { el.textContent = 'Zuletzt aktualisiert: unbekannt'; return; }
+  const str = new Date(updatedIso).toLocaleString('de-DE', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC'
+  }) + ' UTC';
+  el.innerHTML = `Zuletzt aktualisiert: <strong>${str}</strong>`;
+}
+
+// ── Meldungen ────────────────────────────────────────────────────────────────
+function msg(text, type = 'info'){
+  const el = document.getElementById('msg');
+  el.textContent = text || '';
+  el.className = 'msg ' + type + (text ? '' : ' hidden');
+}
+
+// ── Download ─────────────────────────────────────────────────────────────────
+async function download(){
+  const btn = document.getElementById('btnDownload');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Wird geladen …';
+  msg('');
+  try {
+    const resp = await api('/download');
+    if (!resp.ok) throw new Error(`Download fehlgeschlagen (HTTP ${resp.status}).`);
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `skipperplan_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    msg('Excel heruntergeladen.', 'ok');
+  } catch (e) {
+    if (e.message !== 'Falsches Passwort') msg(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Excel herunterladen';
+  }
+}
+
+// ── Aktualisieren ────────────────────────────────────────────────────────────
+function log(text, type = 'info'){
+  const icons = {ok: '✓', err: '✗', info: '·'};
+  const line = document.createElement('div');
+  line.className = 'log-line ' + type;
+  line.innerHTML = `<span class="icon">${icons[type]}</span><span class="log-text"></span>`;
+  line.querySelector('.log-text').textContent = text;
+  document.getElementById('log').appendChild(line);
+}
+
+async function refresh(){
+  msg('');
+  document.getElementById('cardStart').classList.add('hidden');
+  document.getElementById('cardRefresh').classList.remove('hidden');
+  document.getElementById('btnBack').classList.add('hidden');
+  document.getElementById('log').innerHTML = '';
+  log('Daten werden abgerufen und die Excel neu erstellt – das dauert bis zu 2 Minuten.');
+  try {
+    const resp = await api('/refresh', 'GET', 150000);
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) throw new Error(data.error || `HTTP ${resp.status}`);
+    log(`${data.termine} Termine, ${data.yachten} Yachten abgerufen`, 'ok');
+    if (data.changes) log(`${data.changes} Änderungen im Changelog`, 'ok');
+    log(`${data.sailing} Boote aktuell auf dem Wasser, ${data.past} vergangene Törns`, 'ok');
+    if (data.ohne_saison && data.ohne_saison.length)
+      log(`Aktion erforderlich: ${data.ohne_saison.length} Reise(n) ohne Saison-Zuordnung (Trip ID ${data.ohne_saison.join(', ')})`, 'err');
+    if (data.saison_fehler) log(data.saison_fehler, 'err');
+    log(`Excel gespeichert: ${data.updated}`, 'ok');
+    // Stand neu laden (für korrekte Zeitangabe)
+    try { const c = await api('/check', 'POST'); if (c.ok) setTimestamp((await c.json()).updated); } catch (e) {}
+  } catch (e) {
+    if (e.message === 'Falsches Passwort') return;
+    log(`Fehler: ${e.message}`, 'err');
+  }
+  document.getElementById('btnBack').classList.remove('hidden');
+}
+
+function closeRefresh(){
+  document.getElementById('cardRefresh').classList.add('hidden');
+  document.getElementById('cardStart').classList.remove('hidden');
+}
+
+// ── Start ────────────────────────────────────────────────────────────────────
+ensureAwake();                       // Server schon beim Öffnen wecken
+if (pw) login(true);                 // innerhalb derselben Sitzung automatisch anmelden
+else document.getElementById('pw').focus();
+</script>
+</body>
+</html>

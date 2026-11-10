@@ -58,6 +58,20 @@
   .log-line{display:flex;gap:8px}
   .log-line.ok .icon{color:var(--success)} .log-line.err .icon{color:var(--danger)} .log-line.info .icon{color:var(--accent)}
   .log-text{color:var(--text);word-break:break-word}
+  .card-action{border-color:rgba(245,158,11,.55);background:linear-gradient(180deg,rgba(245,158,11,.08),var(--card) 60%)}
+  .card-action .card-title{color:var(--warning)}
+  .action-intro{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px}
+  .trip{border-top:1px solid var(--border);padding:12px 0}
+  .trip:first-of-type{border-top:none;padding-top:0}
+  .trip-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:4px}
+  .trip-meta{font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:10px}
+  .trip-meta b{color:var(--text);font-weight:500}
+  .trip-buttons{display:flex;gap:8px}
+  .trip-buttons .btn{padding:10px;font-size:13px;margin:0}
+  .btn-summer{background:#1e3a5f;color:var(--text);border:1px solid #2e5a8a}
+  .btn-winter{background:#1a2f4d;color:var(--text);border:1px solid #2e4a6e}
+  .trip-done{font-size:12px;color:var(--success);line-height:1.6}
+  .trip-err{font-size:12px;color:var(--danger);margin-top:8px}
   .hidden{display:none!important}
   .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
   @keyframes spin{to{transform:rotate(360deg)}}
@@ -95,6 +109,11 @@
     <button class="logout" onclick="logout()">Abmelden</button>
   </div>
 
+  <div class="card card-action hidden" id="cardActions">
+    <div class="card-title">⚠ Aktion erforderlich</div>
+    <div id="actions"></div>
+  </div>
+
   <div class="card" id="cardStart">
     <div class="card-title">Skipperplan</div>
     <div class="timestamp" id="timestamp">Zuletzt aktualisiert: unbekannt</div>
@@ -113,7 +132,13 @@
 <script>
 const BACKEND_URL = 'https://skipperplan-backend.onrender.com';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-let pw = sessionStorage.getItem('pw') || '';
+// sessionStorage kann in manchen Browser-Modi gesperrt sein – dann ohne Merken weiterarbeiten
+const store = {
+  get(k){ try { return sessionStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v){ try { sessionStorage.setItem(k, v); } catch (e) {} },
+  del(k){ try { sessionStorage.removeItem(k); } catch (e) {} },
+};
+let pw = store.get('pw') || '';
 let awake = null;   // laufender Weck-Versuch (Promise<boolean>)
 
 // ── Server wecken ────────────────────────────────────────────────────────────
@@ -145,13 +170,16 @@ function ensureAwake(){
 }
 
 // ── Backend-Aufruf mit Passwort im Header ────────────────────────────────────
-async function api(path, method = 'GET', timeoutMs = 90000){
+async function api(path, method = 'GET', timeoutMs = 90000, body = null){
   if (!await ensureAwake()) throw new Error('Server nicht erreichbar');
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const headers = {'X-App-Password': pw};
+  if (body) headers['Content-Type'] = 'application/json';
   try {
     const resp = await fetch(BACKEND_URL + path, {
-      method, headers: {'X-App-Password': pw}, signal: ctrl.signal, cache: 'no-store'
+      method, headers, signal: ctrl.signal, cache: 'no-store',
+      body: body ? JSON.stringify(body) : undefined
     });
     if (resp.status === 401) { logout('Sitzung abgelaufen – bitte erneut anmelden.'); throw new Error('Falsches Passwort'); }
     return resp;
@@ -182,13 +210,14 @@ async function login(silent = false){
       method: 'POST', headers: {'X-App-Password': pw}, cache: 'no-store'
     });
     if (resp.status === 401) {
-      sessionStorage.removeItem('pw'); pw = ''; input.value = '';
+      store.del('pw'); pw = ''; input.value = '';
       throw new Error('Falsches Passwort.');
     }
     if (!resp.ok) throw new Error(`Anmeldung fehlgeschlagen (HTTP ${resp.status}).`);
     const data = await resp.json();
-    sessionStorage.setItem('pw', pw);
+    store.set('pw', pw);
     showApp(data.updated);
+    renderActions(data.aktionen);
   } catch (e) {
     gateError(e.message);
   } finally {
@@ -198,7 +227,7 @@ async function login(silent = false){
 }
 
 function logout(text){
-  sessionStorage.removeItem('pw');
+  store.del('pw');
   pw = '';
   document.getElementById('app').style.display = 'none';
   document.getElementById('gate').style.display = 'flex';
@@ -219,6 +248,80 @@ function setTimestamp(updatedIso){
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC'
   }) + ' UTC';
   el.innerHTML = `Zuletzt aktualisiert: <strong>${str}</strong>`;
+}
+
+// ── Aktion erforderlich: offene Saison-Zuordnungen ───────────────────────────
+function deDate(iso){
+  return iso && iso.length === 10 ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : (iso || '');
+}
+
+function el(tag, cls, text){
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function renderActions(aktionen){
+  const card = document.getElementById('cardActions');
+  const box  = document.getElementById('actions');
+  box.innerHTML = '';
+  const reisen = (aktionen && aktionen.reisen) || [];
+  const fehler = aktionen && aktionen.fehler;
+  card.classList.toggle('hidden', !reisen.length && !fehler);
+  if (fehler) box.appendChild(el('p', 'trip-err', fehler));
+  if (!reisen.length) return;
+
+  box.appendChild(el('p', 'action-intro',
+    reisen.length === 1
+      ? 'Diese Reise ist noch keiner Saison zugeordnet.'
+      : `Diese ${reisen.length} Reisen sind noch keiner Saison zugeordnet.`));
+
+  for (const t of reisen) {
+    const item = el('div', 'trip');
+    item.appendChild(el('div', 'trip-name', t.name || `Reise ${t.trip_id}`));
+    const meta = el('div', 'trip-meta');
+    meta.innerHTML =
+      `Trip ID <b></b><br>Zeitraum <b></b><br>Termine <b></b>` +
+      (t.plattform ? `<br>Plattform sagt <b></b>` : '');
+    const bs = meta.querySelectorAll('b');
+    bs[0].textContent = t.trip_id;
+    bs[1].textContent = `${deDate(t.von)} – ${deDate(t.bis)}`;
+    bs[2].textContent = t.termine;
+    if (t.plattform) bs[3].textContent = t.plattform;
+    item.appendChild(meta);
+
+    const buttons = el('div', 'trip-buttons');
+    for (const saison of ['Sommer', 'Winter']) {
+      const b = el('button', 'btn ' + (saison === 'Sommer' ? 'btn-summer' : 'btn-winter'), saison);
+      b.onclick = () => assignSeason(t, saison, item);
+      buttons.appendChild(b);
+    }
+    item.appendChild(buttons);
+    box.appendChild(item);
+  }
+}
+
+async function assignSeason(trip, saison, item){
+  const buttons = item.querySelectorAll('.trip-buttons .btn');
+  buttons.forEach(b => b.disabled = true);
+  const clicked = [...buttons].find(b => b.textContent === saison);
+  clicked.innerHTML = '<div class="spinner"></div> Speichert …';
+  const oldErr = item.querySelector('.trip-err');
+  if (oldErr) oldErr.remove();
+  try {
+    const resp = await api('/saison', 'POST', 90000, {trip_id: trip.trip_id, saison});
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    item.querySelector('.trip-buttons').remove();
+    item.appendChild(el('div', 'trip-done',
+      `${saison} zugeordnet. Wirkt ab der nächsten Aktualisierung.`));
+  } catch (e) {
+    if (e.message === 'Falsches Passwort') return;
+    buttons.forEach(b => b.disabled = false);
+    clicked.textContent = saison;
+    item.appendChild(el('div', 'trip-err', `Nicht gespeichert: ${e.message}`));
+  }
 }
 
 // ── Meldungen ────────────────────────────────────────────────────────────────
@@ -282,7 +385,10 @@ async function refresh(){
     if (data.saison_fehler) log(data.saison_fehler, 'err');
     log(`Excel gespeichert: ${data.updated}`, 'ok');
     // Stand neu laden (für korrekte Zeitangabe)
-    try { const c = await api('/check', 'POST'); if (c.ok) setTimestamp((await c.json()).updated); } catch (e) {}
+    try {
+      const c = await api('/check', 'POST');
+      if (c.ok) { const d = await c.json(); setTimestamp(d.updated); renderActions(d.aktionen); }
+    } catch (e) {}
   } catch (e) {
     if (e.message === 'Falsches Passwort') return;
     log(`Fehler: ${e.message}`, 'err');
